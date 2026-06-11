@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.OpenRLink" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#101214</item>
+        <item name="android:windowBackground">#101214</item>
+    </style>
+</resources>

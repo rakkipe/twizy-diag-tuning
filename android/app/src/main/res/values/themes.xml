@@ -1,0 +1,7 @@
+<resources>
+    <!-- Light window-chrome; Compose verzorgt de eigenlijke kleuren via OpenRLinkTheme. -->
+    <style name="Theme.OpenRLink" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#101214</item>
+        <item name="android:windowBackground">#FFFFFF</item>
+    </style>
+</resources>

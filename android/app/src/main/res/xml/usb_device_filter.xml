@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- FTDI (vLinker FS USB): VID 0x0403. PID's FT232R=0x6001, FT231X/FT230X=0x6015 -->
+    <usb-device vendor-id="1027" product-id="24577" />
+    <usb-device vendor-id="1027" product-id="24597" />
+    <!-- vangnet: alle FTDI-producten -->
+    <usb-device vendor-id="1027" />
+</resources>
