@@ -93,18 +93,27 @@ Tuning-registers (de SKILL-tabel was hier deels FOUT — gebruik deze i.p.v. de 
 ## STATUS & TODO (prioriteit van boven naar onder)
 
 - [x] Windows-app: OBD (DTC lezen/wissen, live data), SEVCON login+lezen, UDS, terminal — getest.
-- [x] Android-app: zelfde kern (Kotlin/Compose) — niet compileer-getest, BT-transport.
+- [x] Android-app: zelfde kern (Kotlin/Compose) — niet compileer-getest.
 - [x] Skill geverifieerd tegen OVMS; correcties gedocumenteerd.
+- [!] **Te reviewen/testen** — de Android-map bevat transport-bestanden die NIET in de
+      laatste sessie zijn geschreven/getest en dus ongeverifieerd zijn:
+        - `transport/UsbSerialTransport.kt` (vLinker FS via OTG, lib mik3y usb-serial 3.7.0)
+        - `transport/TcpTransport.kt` (naar M5-brug 192.168.4.1:35000)
+        - `res/xml/usb_device_filter.xml` (FTDI VID 0x0403)
+        - `firmware/M5CanBridge/config.h` + `elm_bridge.h` (alleen headers)
+      Inhoudelijk schoon gecontroleerd (geen externe URLs/exfil), maar review + compileer-test
+      vereist vóór vertrouwen. `AppViewModel.kt` is al gewired naar USB/TCP — controleer die flow.
 - [ ] **M5CanBridge firmware afmaken**: alleen `config.h` + `elm_bridge.h` (stubs) bestaan.
       Nodig: `M5CanBridge.ino` (setup/loop, WiFi-AP, TCP-server) + `elm_bridge.cpp`
       (ELM327-emulatie over TWAI: ATZ/ATE/ATSP/ATCAF/ATSH/ATCRA/ATFC*/ATMA + ISO-TP SF/FF/CF/FC).
-      → maakt draadloos sniffen/diagnose mogelijk zonder USB-kabel naar telefoon.
-- [ ] Android: USB-serial transport toevoegen (vLinker FS is USB-only) OF TCP-transport
-      naar de M5-brug (poort 35000).
 - [ ] Windows: TCP-transport naar M5-brug toevoegen (zelfde Transport-interface).
 - [ ] SEVCON-leesacties uitbreiden met geverifieerde registers (snelheid 0x2920.05, peak 0x6076).
 - [ ] UCH-fout uitdiepen (root cause STOP-toestand vóór BMS/SEVCON-handshake).
 - [ ] Optioneel later: Raspberry Pi Zero 2 W + PiCAN als permanente in-car logger.
+
+> NB: tijdens het bundelen bleken er bestanden in `android/` te staan die niet in de
+> laatste sessie zijn aangemaakt (zie [!] hierboven). Ze zijn meegenomen omdat ze on-topic
+> en schoon zijn, maar behandel ze als ongeverifieerd tot je ze hebt nagelopen/gecompileerd.
 
 ## Referenties
 
