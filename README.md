@@ -4,6 +4,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-blue)
 ![Vehicle](https://img.shields.io/badge/vehicle-Renault%20Twizy%2080-orange)
 ![Interface](https://img.shields.io/badge/interface-vLinker%20%2F%20ELM327-lightgrey)
+[![Download APK](https://img.shields.io/badge/download-latest%20Android%20APK-brightgreen)](https://github.com/rakkipe/twizy-diag-tuning/releases/latest)
 
 Open-source diagnostics and tuning for the **Renault Twizy 80 (SEVCON Gen4)**, over a
 vLinker / ELM327 USB-CAN adapter. Two apps that share the same verified logic:

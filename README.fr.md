@@ -1,9 +1,10 @@
-# Boîte à outils diagnostic & tuning Twizy
+﻿# Boîte à outils diagnostic & tuning Twizy
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-blue)
 ![Vehicle](https://img.shields.io/badge/vehicle-Renault%20Twizy%2080-orange)
 ![Interface](https://img.shields.io/badge/interface-vLinker%20%2F%20ELM327-lightgrey)
+[![Download APK](https://img.shields.io/badge/download-latest%20Android%20APK-brightgreen)](https://github.com/rakkipe/twizy-diag-tuning/releases/latest)
 
 Diagnostic et tuning open-source pour la **Renault Twizy 80 (SEVCON Gen4)**, via un
 adaptateur USB-CAN vLinker / ELM327. Deux applications partageant la même logique vérifiée :
@@ -131,3 +132,4 @@ restaure les valeurs d'usine.
 
 MIT — voir `LICENSE`. Fourni « tel quel », sans aucune garantie. La licence MIT couvre
 uniquement le code propre de ce projet, pas une base tierce que vous utiliseriez avec lui.
+
