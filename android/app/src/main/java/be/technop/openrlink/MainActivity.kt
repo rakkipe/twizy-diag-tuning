@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun Root(vm: AppViewModel = viewModel()) {
     var tab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Verbinden", "OBD", "Twizy", "Terminal")
+    val tabs = listOf("Verbinden", "OBD", "Twizy", "Tuning", "Live", "ECU", "Terminal")
 
     Scaffold(
         topBar = {
@@ -85,7 +85,10 @@ fun Root(vm: AppViewModel = viewModel()) {
                     0 -> ConnectScreen(vm)
                     1 -> ObdScreen(vm)
                     2 -> TwizyScreen(vm)
-                    3 -> TerminalScreen(vm)
+                    3 -> TuningScreen(vm)
+                    4 -> LiveScreen(vm)
+                    5 -> EcuScreen(vm)
+                    6 -> TerminalScreen(vm)
                 }
             }
             LogPane(vm)
@@ -178,6 +181,122 @@ private fun TwizyScreen(vm: AppViewModel) {
                     modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
                 ) { Text(a.title, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
+        }
+    }
+}
+
+@Composable
+private fun LiveScreen(vm: AppViewModel) {
+    Column(Modifier.fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState())) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(onClick = { vm.toggleLiveMeters() }, enabled = vm.connected.value) {
+                Text(if (vm.liveRunning.value) "■ Live stoppen" else "▶ Live starten")
+            }
+            Text(if (vm.liveRunning.value) "● live" else "○ uit",
+                color = if (vm.liveRunning.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyMedium)
+        }
+        Text("OVMS-meetblok (0x4600/0x4602). Koppel/stroom bewegen alleen in GO tijdens rijden.",
+            style = MaterialTheme.typography.labelSmall)
+        Spacer(Modifier.height(10.dp))
+        if (vm.meters.isEmpty()) Text("—")
+        else vm.meters.forEach { (label, value) ->
+            ListItem(
+                headlineContent = { Text(label) },
+                trailingContent = { Text(value, style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary) }
+            )
+            HorizontalDivider()
+        }
+    }
+}
+
+@Composable
+private fun TuningScreen(vm: AppViewModel) {
+    var confirm by remember { mutableStateOf<String?>(null) }
+
+    Column(Modifier.fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState())) {
+        SectionTitle("Tuning-profielen (SEVCON)")
+        Text("⚠ Schrijft naar de motorcontroller. Alleen stilstaand, auto in N (niet GO). " +
+            "Kan toelating/verzekering raken. STOCK zet alles terug naar fabriek.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        Spacer(Modifier.height(10.dp))
+
+        vm.tuningProfileNames().forEach { name ->
+            val danger = name == "SNELWEG" || name == "RACE-LITE"
+            Button(
+                onClick = { confirm = name },
+                enabled = vm.connected.value && !vm.busy.value,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                colors = if (danger) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                         else ButtonDefaults.buttonColors()
+            ) { Text("Laad profiel: $name") }
+        }
+
+        Spacer(Modifier.height(6.dp))
+        Text("Tip: draai eerst 'Verbind USB' op de Verbinden-tab. Volg de voortgang onderin de log.",
+            style = MaterialTheme.typography.labelSmall)
+    }
+
+    confirm?.let { name ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            title = { Text("Profiel '$name' toepassen?") },
+            text = { Text("Dit schrijft de tuning naar de SEVCON.\n\nZet de auto in N (niet GO), stilstaand, contact aan. Doorgaan?") },
+            confirmButton = {
+                TextButton(onClick = { vm.applyTuning(name); confirm = null }) { Text("Ja, schrijven") }
+            },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Annuleren") } }
+        )
+    }
+}
+
+@Composable
+private fun EcuScreen(vm: AppViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // check DB-status buiten de UI-thread, éénmalig bij openen
+    LaunchedEffect(Unit) { vm.refreshDtcDb() }
+    // systeem-bestandskiezer voor de ecu.zip
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val input = context.contentResolver.openInputStream(uri)
+            if (input != null) vm.importEcuZip(input)
+        }
+    }
+
+    Column(Modifier.fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState())) {
+        SectionTitle("Multi-ECU DTC-scan (Twizy)")
+        Text("Leest foutcodes van UCH/BMS/lader/display (read-only, geen writes). " +
+            "Codes krijgen klachttekst zodra je je eigen ecu.zip in de app hebt geladen.",
+            style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = { vm.ecuScan() }, enabled = vm.connected.value) { Text("Scan alle ECU's") }
+
+        Spacer(Modifier.height(12.dp))
+        SectionTitle("DTC-database (ecu.zip)")
+        val dbOk = vm.dtcDbReady.value
+        Text(
+            if (dbOk) "✓ DTC-database geladen — codes worden vertaald"
+            else "ⓘ Nog geen database — kies je ecu.zip om codes te vertalen",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (dbOk) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { picker.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }) {
+                Text("Kies ecu.zip")
+            }
+            OutlinedButton(onClick = { vm.refreshDtcDb() }) { Text("Opnieuw checken") }
+        }
+        Text("Wordt gekopieerd naar:\n${vm.dtcDbPath()}",
+            style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace)
+
+        Spacer(Modifier.height(12.dp))
+        SectionTitle("Resultaat")
+        if (vm.ecuScanResults.isEmpty()) Text("—")
+        else vm.ecuScanResults.forEach {
+            Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
         }
     }
 }

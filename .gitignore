@@ -17,3 +17,18 @@ local.properties
 # OS
 .DS_Store
 Thumbs.db
+
+# Signing secrets — NOOIT committen
+*.keystore
+keystore.properties
+
+# Proprietary ECU-database (DDT4All/DDT2000) — nooit in de repo, gebruiker levert zelf
+ecu.zip
+*.ecu.zip
+ecus/
+db.json
+
+# Build-artefacten / grote binaries
+*.apk
+*.aab
+*.log

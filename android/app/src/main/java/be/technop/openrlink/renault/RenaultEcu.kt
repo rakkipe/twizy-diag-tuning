@@ -23,12 +23,14 @@ data class RenaultEcu(
 object RenaultEcus {
     /** Twizy-relevante ECU's. txHeader 75A = PEB/inverter zoals besproken (te bevestigen). */
     val TWIZY: List<RenaultEcu> = listOf(
-        RenaultEcu("PEB",     "PEB / Inverter (Sevcon)", "75A", "762", verified = false,
-            note = "Node 0x75A genoemd in diagnose; rx-ID verifiëren via sniff."),
-        RenaultEcu("LBC_BMS", "LBC / BMS (batterij)",    "79B", "7BB", verified = false,
-            note = "Typische Renault EV BMS-range; bevestigen."),
-        RenaultEcu("BCB",     "BCB / Charger",           "792", "793", verified = false),
-        RenaultEcu("TDB",     "TDB / Cluster (dashboard)","743", "763", verified = false),
+        RenaultEcu("LBC_BMS", "LBC / BMS (batterij)",    "79B", "7BB", verified = true,
+            note = "Live bevestigd: antwoordt op UDS 19 02 (leest DTC's)."),
+        RenaultEcu("BCB",     "BCB / Charger",           "792", "793", verified = true,
+            note = "Live bevestigd: aanwezig; DTC-dienst afhankelijk van firmware."),
+        RenaultEcu("TDB",     "TDB / Cluster (dashboard)","743", "763", verified = true,
+            note = "Live bevestigd: aanwezig (data via service 21)."),
+        RenaultEcu("PEB",     "PEB / Sevcon (CANopen)",  "75A", "762", verified = false,
+            note = "Sevcon praat CANopen (node 1), niet UDS — antwoordt hier niet."),
     )
 
     fun byKey(list: List<RenaultEcu>, key: String): RenaultEcu? = list.firstOrNull { it.key == key }

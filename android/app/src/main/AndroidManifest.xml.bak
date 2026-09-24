@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Bluetooth Classic (SPP) naar ELM327 / vLinker FS2 -->
@@ -19,8 +19,8 @@
     <application
         android:allowBackup="true"
         android:label="OpenRLink"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:roundIcon="@drawable/ic_launcher_foreground"
         android:supportsRtl="true"
         android:theme="@style/Theme.OpenRLink">
         <activity
@@ -41,4 +41,3 @@
         </activity>
     </application>
 </manifest>
-
