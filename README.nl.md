@@ -40,6 +40,10 @@ Ga je hiermee niet akkoord, gebruik de software dan niet.
 
 ![Twizy Pitservice PRO](docs/screenshots/pc-pitservice-pro.png)
 
+**OpenRLink (Android)** — Tuning-profielen-tab:
+
+<img src="docs/screenshots/android-openrlink.png" width="320" alt="OpenRLink Android">
+
 ## Wat het is
 
 Beide apps praten met de **SEVCON Gen4** via **CANopen SDO** (tuning + live-telemetrie) en
