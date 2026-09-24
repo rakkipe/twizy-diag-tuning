@@ -1,5 +1,10 @@
 # Boîte à outils diagnostic & tuning Twizy
 
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-blue)
+![Vehicle](https://img.shields.io/badge/vehicle-Renault%20Twizy%2080-orange)
+![Interface](https://img.shields.io/badge/interface-vLinker%20%2F%20ELM327-lightgrey)
+
 Diagnostic et tuning open-source pour la **Renault Twizy 80 (SEVCON Gen4)**, via un
 adaptateur USB-CAN vLinker / ELM327. Deux applications partageant la même logique vérifiée :
 
@@ -28,6 +33,12 @@ l'embrayage ou la batterie, et réduire fortement l'autonomie.
 Si vous n'acceptez pas cela, n'utilisez pas le logiciel.
 
 ---
+
+## Captures d'écran
+
+**Twizy Pitservice PRO (Windows)** — onglet télémétrie en direct :
+
+![Twizy Pitservice PRO](docs/screenshots/pc-pitservice-pro.png)
 
 ## Ce que c'est
 

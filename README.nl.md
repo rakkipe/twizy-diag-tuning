@@ -1,5 +1,10 @@
 # Twizy Diagnose- & Tuning-toolkit
 
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-blue)
+![Vehicle](https://img.shields.io/badge/vehicle-Renault%20Twizy%2080-orange)
+![Interface](https://img.shields.io/badge/interface-vLinker%20%2F%20ELM327-lightgrey)
+
 Open-source diagnose en tuning voor de **Renault Twizy 80 (SEVCON Gen4)**, via een
 vLinker / ELM327 USB-CAN-adapter. Twee apps met dezelfde geverifieerde logica:
 
@@ -28,6 +33,12 @@ bereik sterk verlagen.
 Ga je hiermee niet akkoord, gebruik de software dan niet.
 
 ---
+
+## Screenshots
+
+**Twizy Pitservice PRO (Windows)** — Live-telemetrie-tab:
+
+![Twizy Pitservice PRO](docs/screenshots/pc-pitservice-pro.png)
 
 ## Wat het is
 

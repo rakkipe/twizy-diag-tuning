@@ -1,5 +1,10 @@
 # Twizy Diagnose- & Tuning-Toolkit
 
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-blue)
+![Vehicle](https://img.shields.io/badge/vehicle-Renault%20Twizy%2080-orange)
+![Interface](https://img.shields.io/badge/interface-vLinker%20%2F%20ELM327-lightgrey)
+
 Open-Source-Diagnose und -Tuning für den **Renault Twizy 80 (SEVCON Gen4)** über einen
 vLinker- / ELM327-USB-CAN-Adapter. Zwei Apps mit derselben verifizierten Logik:
 
@@ -28,6 +33,12 @@ Reichweite stark verringern.
 Wenn du dem nicht zustimmst, nutze die Software nicht.
 
 ---
+
+## Screenshots
+
+**Twizy Pitservice PRO (Windows)** — Live-Telemetrie-Tab:
+
+![Twizy Pitservice PRO](docs/screenshots/pc-pitservice-pro.png)
 
 ## Was es ist
 
