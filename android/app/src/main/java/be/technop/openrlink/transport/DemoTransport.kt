@@ -49,6 +49,12 @@ class DemoTransport(private val vehicle: EvVehicle = EvVehicle.TWIZY) : Transpor
     private fun demoEv(cmd: String): String {
         fun hex(b: List<Int>) = b.joinToString(" ") { "%02X".format(it) }
         fun u16(v: Int) = listOf(v shr 8, v and 255)
+        if (cmd in listOf("22F187", "22F188", "22F18C")) return "62 ${cmd.drop(2).chunked(2).joinToString(" ")} " + hex("DEMO-ECU".map { it.code })
+        if (cmd == "22F1A0") return "62 F1 A0 01"
+        if (cmd in listOf("22F18A", "22F194", "22F195")) return "62 ${cmd.drop(2).chunked(2).joinToString(" ")} 44 45 4D 4F"
+        if (cmd.startsWith("10")) return "50 ${cmd.drop(2)}"
+        if (cmd.startsWith("1902")) return "59 02 FF"
+        if (cmd == "17FF00") return "57 00"
         val data = when (cmd) {
             "222002" -> u16(3750)
             "223206" -> listOf(94)

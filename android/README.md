@@ -1,8 +1,8 @@
 # OpenRLink voor Android
 
-OpenRLink 1.5.0-preview breidt de bestaande Twizy-app uit met aparte uitleesprofielen voor Renault Zoe fase 1, Zoe ZE50 en Nissan Leaf 24/30 en 40/62 kWh.
+OpenRLink 1.6.0-preview breidt de bestaande Twizy-app uit met aparte uitleesprofielen voor Renault Zoe fase 1, Zoe ZE50 en Nissan Leaf 24/30 en 40/62 kWh.
 
-Zie [de handleiding, voertuigmatrix, bronnen en teststatus](../docs/OpenRLink-1.5-EV.md). De nieuwe profielen zijn offline getest; fysieke validatie op Zoe/Leaf staat nog open.
+Zie [de uitgebreide ECU-scan, databasewerking en teststatus](../docs/OpenRLink-1.6-ECU.md) en [de batterijprofielen](../docs/OpenRLink-1.5-EV.md). De nieuwe profielen zijn offline getest; fysieke validatie op Zoe/Leaf staat nog open.
 
 - Voertuigkeuze bij Verbinden, vóór het verbinden.
 - Accugegevens en 96 celspanningen, met herkenbare gedeeltelijke uitlezing.
@@ -21,7 +21,7 @@ gradle :app:testDebugUnitTest :app:assembleDebug
 
 Voor een release: `gradle :app:assembleRelease`. Release-ondertekening gebruikt uitsluitend je lokale `keystore.properties` en keystore; die horen niet in Git.
 
-Applicatie-ID: `be.technop.openrlink`; minimaal Android 8 (API 26). Met dezelfde ondertekening kan versiecode 9 de lokale 1.4-versie (code 8) bijwerken.
+Applicatie-ID: `be.technop.openrlink`; minimaal Android 8 (API 26). Met dezelfde ondertekening kan versiecode 10 1.4 (code 8) en 1.5 (code 9) bijwerken.
 
 ## Architectuur
 

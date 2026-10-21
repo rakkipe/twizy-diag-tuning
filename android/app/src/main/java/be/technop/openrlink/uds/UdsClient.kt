@@ -40,6 +40,9 @@ class UdsClient(private val elm: Elm327, private val rxHeader: String? = null) {
 
     fun readLocalIdentifier(id: Int): Result = send("21%02X".format(id))
 
+    /** KWP ReadStatusOfDiagnosticTroubleCodes; read-only fallback for legacy modules. */
+    fun readDtcStatusKwp(): Result = send("17FF00")
+
     /** 0x2E WriteDataByIdentifier. */
     fun writeDataByIdentifier(did: Int, dataHex: String): Result =
         send("2E%04X".format(did) + dataHex.replace(" ", ""))

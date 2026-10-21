@@ -15,12 +15,7 @@ enum class EvVehicle(val label: String, val note: String) {
         else EcuTarget("LBC / batterij", "79B", "7BB")
     val controller: EcuTarget get() = if (this == ZOE_PH2) EcuTarget("EVC / voertuigcontroller", "18DADAF1", "18DAF1DA")
         else EcuTarget("EVC / voertuigcontroller", "7E4", "7EC")
-    val scanTargets: List<EcuTarget> get() = when (this) {
-        ZOE_PH1 -> listOf(battery, controller, EcuTarget("BCB / lader", "792", "793"), EcuTarget("PEB / omvormer", "75A", "77E"))
-        ZOE_PH2 -> listOf(battery, controller, EcuTarget("Omvormer", "18DADFF1", "18DAF1DF"), EcuTarget("BCM / carrosserie", "745", "765"))
-        LEAF_24_30, LEAF_40_62 -> listOf(battery) // charger/PDM is on a different CAN bus; never assume routing
-        TWIZY -> emptyList()
-    }
+    val scanTargets: List<EcuTarget> get() = EcuModules.builtIn(this).map { it.target }
 }
 
 /** All EV requests are reads; these profiles can never execute tuning. */

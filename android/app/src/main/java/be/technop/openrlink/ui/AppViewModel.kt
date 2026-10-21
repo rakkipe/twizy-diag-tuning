@@ -116,7 +116,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val obdReadStatus = mutableStateListOf<String>()
 
     fun selectVehicle(v: EvVehicle) {
-        if (connected.value || busy.value || liveRunning.value) return
+        if (connected.value || busy.value || liveRunning.value || ecuDatabaseLoading.value) return
         vehicle.value = v
         clearReadings()
     }
@@ -126,6 +126,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         ecuScanResults.clear(); meters.clear(); live.clear()
         dtcStored.clear(); dtcPending.clear(); dtcPermanent.clear()
         obdReadStatus.clear()
+        moduleScans.clear(); ecuModules.clear(); ecuScanProgress.value = ""
     }
 
     fun readEv(includeCells: Boolean = true) = io("EV-uitlezing") {
@@ -154,26 +155,64 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var liveJob: Job? = null
 
     private val dtcDb by lazy { DtcDb(getApplication()) }
+    private val ecuDatabase by lazy {
+        val app = getApplication<Application>()
+        EcuDatabase({ listOfNotNull(java.io.File(app.filesDir, "ecu.zip"), app.getExternalFilesDir(null)?.let { java.io.File(it, "ecu.zip") }) }, java.io.File(app.filesDir, "ecu.zip"))
+    }
     val dtcDbReady = mutableStateOf(false)
+    val ecuModules = mutableStateListOf<EcuModule>()
+    val ecuDatabaseMessage = mutableStateOf("Database nog niet gecontroleerd")
+    val ecuDatabaseLoading = mutableStateOf(false)
+    val ecuScanning = mutableStateOf(false)
+    val ecuScanProgress = mutableStateOf("")
+    val identifyEcus = mutableStateOf(true)
+    val moduleScans = mutableStateListOf<ModuleScan>()
+    private val ecuStop = java.util.concurrent.atomic.AtomicBoolean(false)
+    private class ScanStopped : RuntimeException()
+    fun stopEcuScan() { ecuStop.set(true); ecuScanProgress.value = "Stoppen na het huidige antwoord…" }
+    fun ecuReport(): String = buildString {
+        appendLine("OpenRLink 1.6.0-preview — ECU-scan ${vehicle.value.label}")
+        if (demo.value) appendLine("DEMO — FICTIEVE GEGEVENS")
+        appendLine("Fysieke bereikbaarheid en volledigheid niet gevalideerd.")
+        moduleScans.forEach { scan -> scan.lines().forEach { appendLine(it) }; scan.raw.forEach { appendLine(it) }; appendLine() }
+    }
     fun dtcDbPath(): String = dtcDb.expectedPath()
 
     /** Check (buiten de UI-thread) of de DTC-database leesbaar is. */
-    fun refreshDtcDb() {
+    fun refreshDtcDb(force: Boolean = false) {
+        if (ecuDatabaseLoading.value || busy.value || liveRunning.value) return
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) { dtcDb.available() }
-            dtcDbReady.value = ok
+            ecuDatabaseLoading.value = true
+            val v = vehicle.value
+            try {
+                val modules = withContext(Dispatchers.IO) {
+                    if (force) { ecuDatabase.reset(); dtcDb.reset() }
+                    EcuModules.merge(v, ecuDatabase.modules(v))
+                }
+                if (vehicle.value == v) {
+                    ecuModules.clear(); ecuModules.addAll(modules)
+                    dtcDbReady.value = ecuDatabase.available()
+                    ecuDatabaseMessage.value = ecuDatabase.message
+                }
+            } catch (ex: Exception) {
+                ecuModules.clear(); ecuModules.addAll(EcuModules.builtIn(v))
+                ecuDatabaseMessage.value = "Database niet ingelezen: ${ex.message}; gepubliceerde modulelijst beschikbaar"
+            } finally { ecuDatabaseLoading.value = false }
         }
     }
 
     /** Kopieer een via de systeem-kiezer gekozen ecu.zip naar de interne app-map. */
     fun importEcuZip(input: java.io.InputStream) {
+        if (busy.value || liveRunning.value || ecuDatabaseLoading.value) { input.close(); return }
         viewModelScope.launch {
             busy.value = true
             logLine("ecu.zip kopiëren naar de app…")
-            val ok = withContext(Dispatchers.IO) { dtcDb.importFrom(input) }
+            val ok = withContext(Dispatchers.IO) { ecuDatabase.importFrom(input) }
+            dtcDb.reset()
             dtcDbReady.value = ok
             logLine(if (ok) "✓ DTC-database geladen (${dtcDb.path})" else "✗ ecu.zip kon niet gelezen worden")
             busy.value = false
+            refreshDtcDb()
         }
     }
 
@@ -209,7 +248,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         connectWith(be.technop.openrlink.transport.TcpTransport(host, port))
 
     private fun connectWith(t: Transport) {
-        if (busy.value || connected.value) return
+        if (busy.value || connected.value || ecuDatabaseLoading.value) return
         viewModelScope.launch {
             clearReadings()
             busy.value = true; status.value = "Verbinden met ${t.name}…"
@@ -280,9 +319,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Multi-ECU DTC-scan over de Twizy-ECU's (UDS/KWP, read-only), met DTC→tekst
      *  uit de lokale ecu.zip. Start per ECU eerst een sessie (Renault fout-sectie 1081). */
-    fun ecuScan() = io("ECU-scan") {
+    fun ecuScan(moduleId: String? = null) = io("ECU-scan") {
         val e = elm ?: return@io
         val v = vehicle.value
+        if (!v.isTwizy) { scanEvModules(e, v, moduleId); return@io }
         withContext(Dispatchers.Main) { ecuScanResults.clear() }
         val results = ArrayList<String>()
         val targets = if (v.isTwizy) RenaultEcus.TWIZY.filter { it.key != "PEB" }
@@ -322,6 +362,33 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             ecuScanResults.clear(); ecuScanResults.addAll(results); ecuScanResults.add(note)
             logLine("ECU-scan klaar: ${results.size} regels")
         }
+    }
+
+    private suspend fun scanEvModules(e: Elm327, v: EvVehicle, moduleId: String?) {
+        val available = EcuModules.merge(v, ecuDatabase.modules(v))
+        val modules = if (moduleId == null) available else available.filter { it.id == moduleId }
+        val identify = identifyEcus.value
+        ecuStop.set(false)
+        withContext(Dispatchers.Main) {
+            ecuScanning.value = true; moduleScans.clear(); ecuScanResults.clear()
+            ecuModules.clear(); ecuModules.addAll(available)
+        }
+        try {
+            val scanner = EcuScanner(e, ecuDatabase)
+            val context = kotlin.coroutines.coroutineContext
+            for ((i, module) in modules.withIndex()) {
+                if (ecuStop.get()) break
+                withContext(Dispatchers.Main) { ecuScanProgress.value = "${i + 1}/${modules.size}: ${module.target.name}" }
+                val result = scanner.scan(module, v, identify) { context.ensureActive(); if (ecuStop.get()) throw ScanStopped() }
+                withContext(Dispatchers.Main) { moduleScans.add(result); ecuScanResults.addAll(result.lines()) }
+            }
+            withContext(Dispatchers.Main) { ecuScanProgress.value = if (ecuStop.get()) "Gestopt — ${moduleScans.size}/${modules.size} modules afgewerkt" else "Klaar — ${moduleScans.size} modules bevraagd" }
+        } catch (_: ScanStopped) {
+            withContext(Dispatchers.Main) { ecuScanProgress.value = "Gestopt — vorige module-antwoorden blijven beschikbaar" }
+        } catch (ex: Exception) {
+            withContext(Dispatchers.Main) { ecuScanProgress.value = "Scan afgebroken: ${ex.message}. Verbreek en verbind opnieuw." }
+            throw ex
+        } finally { withContext(Dispatchers.Main) { ecuScanning.value = false } }
     }
 
     /** Namen van de beschikbare tuning-profielen (voor de UI-knoppen). */
@@ -412,7 +479,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun io(tag: String, block: suspend () -> Unit) {
         viewModelScope.launch {
-            if (busy.value || liveRunning.value) { logLine("Stop live of wacht op de huidige actie — $tag"); return@launch }
+            if (busy.value || liveRunning.value || ecuDatabaseLoading.value) { logLine("Stop live of wacht op de huidige actie — $tag"); return@launch }
             if (!connected.value) { logLine("Niet verbonden — $tag overgeslagen"); return@launch }
             busy.value = true
             try { withContext(Dispatchers.IO) { ioMutex.withLock { block() } } }

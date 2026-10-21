@@ -1,6 +1,6 @@
-> **Android 1.5.0-preview:** voertuigkeuze voor Renault Zoe fase 1, Zoe ZE50 en Nissan Leaf 24/30 en 40/62 kWh, met batterijgegevens, celspanningen en rapportexport. Zie [de voertuigmatrix en teststatus](docs/OpenRLink-1.5-EV.md). Nieuwe EV-profielen zijn uitsluitend voor uitlezen en nog niet op echte voertuigen gevalideerd.
+> **Android 1.6.0-preview:** brede ECU-scan voor Renault Zoe en Nissan Leaf, met modulecatalogus uit je eigen ecu.zip, uitlezing per module, stopknop en ECU-rapport. Zie [werking, dekking en beperkingen](docs/OpenRLink-1.6-ECU.md). De voertuigbereikbaarheid is nog niet fysiek gevalideerd.
 
-[Android 1.5.0-preview downloaden](https://github.com/rakkipe/twizy-diag-tuning/releases/tag/v1.5.0-preview)
+[Android 1.6.0-preview downloaden](https://github.com/rakkipe/twizy-diag-tuning/releases/tag/v1.6.0-preview)
 
 # Twizy Diag & Tuning Toolkit
 

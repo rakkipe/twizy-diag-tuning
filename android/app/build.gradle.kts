@@ -9,7 +9,8 @@ plugins {
 
 // Release-signing: lees keystore.properties (blijft lokaal, niet in git)
 val keystoreProps = Properties()
-val keystorePropsFile = rootProject.file("keystore.properties")
+val keystorePropsFile = System.getenv("OPENRLINK_SIGNING_PROPERTIES")?.let { file(it) }
+    ?: rootProject.file("keystore.properties")
 if (keystorePropsFile.exists()) {
     keystoreProps.load(FileInputStream(keystorePropsFile))
 }
@@ -22,14 +23,14 @@ android {
         applicationId = "be.technop.openrlink"
         minSdk = 26          // Android 8.0 — nodig voor moderne BT-API's
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.5.0-preview"
+        versionCode = 10
+        versionName = "1.6.0-preview"
     }
 
     signingConfigs {
         create("release") {
             if (keystorePropsFile.exists()) {
-                storeFile = rootProject.file(keystoreProps["storeFile"] as String)
+                storeFile = keystorePropsFile.parentFile.resolve(keystoreProps["storeFile"] as String)
                 storePassword = keystoreProps["storePassword"] as String
                 keyAlias = keystoreProps["keyAlias"] as String
                 keyPassword = keystoreProps["keyPassword"] as String
@@ -56,6 +57,7 @@ android {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.6")

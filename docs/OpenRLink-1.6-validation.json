@@ -1,0 +1,24 @@
+{
+  "version": "1.6.0-preview",
+  "versionCode": 10,
+  "unitTests": 33,
+  "failures": 0,
+  "moduleCountsWithPersonalDatabase": {
+    "zoePh1": 21,
+    "zoeZe50": 29,
+    "leaf24_30": 16,
+    "leaf40_62": 15
+  },
+  "uiChecks": [
+    "four full module scans in emulator",
+    "stop at response boundary",
+    "personal database found in app-owned storage"
+  ],
+  "hardwareVehicleValidated": false,
+  "apkSha256": "e23c5b48e25a01cc4f6a754ca3610fb25c7b391ec9837f1b3ee4ec9e4f54f5fe",
+  "phoneInstallationChecks": [
+    "Samsung SM-A226B: version 1.6.0-preview installed",
+    "Xiaomi 15T Pro: updated from 1.4.2 to 1.6.0-preview; database checksum verified"
+  ],
+  "personalDatabaseDistributed": false
+}

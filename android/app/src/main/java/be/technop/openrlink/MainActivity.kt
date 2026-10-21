@@ -65,7 +65,7 @@ fun Root(vm: AppViewModel = viewModel()) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("OpenRLink 1.5") },
+                title = { Text("OpenRLink 1.6") },
                 actions = {
                     if (vm.busy.value) CircularProgressIndicator(
                         Modifier.size(20.dp).padding(end = 12.dp), strokeWidth = 2.dp
@@ -113,7 +113,7 @@ private fun ConnectScreen(vm: AppViewModel) {
         SectionTitle("Voertuig")
         var expanded by remember { mutableStateOf(false) }
         Box {
-            OutlinedButton(onClick = { expanded = true }, enabled = !vm.connected.value && !vm.busy.value) {
+            OutlinedButton(onClick = { expanded = true }, enabled = !vm.connected.value && !vm.busy.value && !vm.ecuDatabaseLoading.value) {
                 Text(vm.vehicle.value.label)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
