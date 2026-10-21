@@ -28,6 +28,11 @@ import be.technop.openrlink.ui.AppViewModel
 import be.technop.openrlink.ui.theme.OpenRLinkTheme
 import be.technop.openrlink.elm.Elm327
 import be.technop.openrlink.transport.DemoTransport
+import be.technop.openrlink.ev.EvVehicle
+import be.technop.openrlink.ui.EvScreen
+import be.technop.openrlink.ui.EvInfoScreen
+import be.technop.openrlink.ui.EvLiveScreen
+import be.technop.openrlink.ui.EvEcuScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -53,12 +58,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun Root(vm: AppViewModel = viewModel()) {
     var tab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Verbinden", "OBD", "Twizy", "Tuning", "Live", "ECU", "Terminal")
+    val isTwizy = vm.vehicle.value.isTwizy
+    val tabs = listOf("Verbinden", "OBD", if (isTwizy) "Twizy" else "Accu",
+        if (isTwizy) "Tuning" else "Info", "Live", "ECU", if (isTwizy) "Terminal" else "Rapport")
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("OpenRLink") },
+                title = { Text("OpenRLink 1.5") },
                 actions = {
                     if (vm.busy.value) CircularProgressIndicator(
                         Modifier.size(20.dp).padding(end = 12.dp), strokeWidth = 2.dp
@@ -69,13 +76,13 @@ fun Root(vm: AppViewModel = viewModel()) {
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
             Text(
-                vm.status.value,
+                "${vm.vehicle.value.label}\n${if (vm.demo.value) "DEMO — fictieve gegevens · " else ""}${vm.status.value}",
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (vm.connected.value) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurface
             )
-            TabRow(selectedTabIndex = tab) {
+            ScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
                 tabs.forEachIndexed { i, t ->
                     Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) })
                 }
@@ -84,11 +91,11 @@ fun Root(vm: AppViewModel = viewModel()) {
                 when (tab) {
                     0 -> ConnectScreen(vm)
                     1 -> ObdScreen(vm)
-                    2 -> TwizyScreen(vm)
-                    3 -> TuningScreen(vm)
+                    2 -> if (isTwizy) TwizyScreen(vm) else EvScreen(vm)
+                    3 -> if (isTwizy) TuningScreen(vm) else EvInfoScreen(vm)
                     4 -> LiveScreen(vm)
                     5 -> EcuScreen(vm)
-                    6 -> TerminalScreen(vm)
+                    6 -> if (isTwizy) TerminalScreen(vm) else EvScreen(vm, reportOnly = true)
                 }
             }
             LogPane(vm)
@@ -102,6 +109,22 @@ private fun ConnectScreen(vm: AppViewModel) {
     var host by remember { mutableStateOf("192.168.4.1") }
     var port by remember { mutableStateOf("35000") }
     Column(Modifier.fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState())) {
+
+        SectionTitle("Voertuig")
+        var expanded by remember { mutableStateOf(false) }
+        Box {
+            OutlinedButton(onClick = { expanded = true }, enabled = !vm.connected.value && !vm.busy.value) {
+                Text(vm.vehicle.value.label)
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                EvVehicle.entries.forEach { v ->
+                    DropdownMenuItem(text = { Text(v.label) }, onClick = { vm.selectVehicle(v); expanded = false })
+                }
+            }
+        }
+        Text(vm.vehicle.value.note, style = MaterialTheme.typography.bodySmall)
+        if (vm.connected.value) Text("Verbreek de verbinding om van voertuig te wisselen.", style = MaterialTheme.typography.labelSmall)
+        Spacer(Modifier.height(12.dp))
 
         SectionTitle("1) vLinker FS via USB-OTG")
         Text("OTG-kabel tussen telefoon en vLinker. Eerste keer: permissie toestaan, dan nogmaals drukken.",
@@ -148,17 +171,22 @@ private fun ConnectScreen(vm: AppViewModel) {
 @Composable
 private fun ObdScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState())) {
+        Text("Algemene OBD-II via CAN. Een elektrische wagen ondersteunt deze emissiediensten mogelijk niet; gebruik ook Accu en ECU.", style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { vm.scanDtcs() }) { Text("Scan DTC's") }
-            Button(onClick = { vm.clearDtcs() }) { Text("Wis DTC's") }
-            Button(onClick = { vm.readLive() }) { Text("Live data") }
+            Button(onClick = { vm.scanDtcs() }, enabled = vm.connected.value && !vm.busy.value && !vm.liveRunning.value) { Text("Scan DTC's") }
+            if (vm.vehicle.value.isTwizy) Button(onClick = { vm.clearDtcs() }) { Text("Wis DTC's") }
+            Button(onClick = { vm.readLive() }, enabled = vm.connected.value && !vm.busy.value && !vm.liveRunning.value) { Text("Live data") }
         }
         Spacer(Modifier.height(12.dp))
+        vm.obdReadStatus.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
         SectionTitle("Opgeslagen DTC's (mode 03)")
         if (vm.dtcStored.isEmpty()) Text("—") else vm.dtcStored.forEach { Text("• $it") }
         Spacer(Modifier.height(8.dp))
         SectionTitle("Pending DTC's (mode 07)")
         if (vm.dtcPending.isEmpty()) Text("—") else vm.dtcPending.forEach { Text("• $it") }
+        Spacer(Modifier.height(8.dp))
+        SectionTitle("Permanente DTC's (mode 0A)")
+        if (vm.dtcPermanent.isEmpty()) Text("—") else vm.dtcPermanent.forEach { Text("• $it") }
         Spacer(Modifier.height(12.dp))
         SectionTitle("Live data (mode 01)")
         vm.live.forEach { Text("${it.label}: ${"%.1f".format(it.value)} ${it.unit}") }
@@ -187,6 +215,7 @@ private fun TwizyScreen(vm: AppViewModel) {
 
 @Composable
 private fun LiveScreen(vm: AppViewModel) {
+    if (!vm.vehicle.value.isTwizy) { EvLiveScreen(vm); return }
     Column(Modifier.fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState())) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(onClick = { vm.toggleLiveMeters() }, enabled = vm.connected.value) {
@@ -212,47 +241,11 @@ private fun LiveScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun TuningScreen(vm: AppViewModel) {
-    var confirm by remember { mutableStateOf<String?>(null) }
-
-    Column(Modifier.fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState())) {
-        SectionTitle("Tuning-profielen (SEVCON)")
-        Text("⚠ Schrijft naar de motorcontroller. Alleen stilstaand, auto in N (niet GO). " +
-            "Kan toelating/verzekering raken. STOCK zet alles terug naar fabriek.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-        Spacer(Modifier.height(10.dp))
-
-        vm.tuningProfileNames().forEach { name ->
-            val danger = name == "SNELWEG" || name == "RACE-LITE"
-            Button(
-                onClick = { confirm = name },
-                enabled = vm.connected.value && !vm.busy.value,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                colors = if (danger) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                         else ButtonDefaults.buttonColors()
-            ) { Text("Laad profiel: $name") }
-        }
-
-        Spacer(Modifier.height(6.dp))
-        Text("Tip: draai eerst 'Verbind USB' op de Verbinden-tab. Volg de voortgang onderin de log.",
-            style = MaterialTheme.typography.labelSmall)
-    }
-
-    confirm?.let { name ->
-        AlertDialog(
-            onDismissRequest = { confirm = null },
-            title = { Text("Profiel '$name' toepassen?") },
-            text = { Text("Dit schrijft de tuning naar de SEVCON.\n\nZet de auto in N (niet GO), stilstaand, contact aan. Doorgaan?") },
-            confirmButton = {
-                TextButton(onClick = { vm.applyTuning(name); confirm = null }) { Text("Ja, schrijven") }
-            },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Annuleren") } }
-        )
-    }
-}
+private fun TuningScreen(vm: AppViewModel) = be.technop.openrlink.ui.ProfileEditorScreen(vm)
 
 @Composable
 private fun EcuScreen(vm: AppViewModel) {
+    if (!vm.vehicle.value.isTwizy) { EvEcuScreen(vm); return }
     val context = androidx.compose.ui.platform.LocalContext.current
     // check DB-status buiten de UI-thread, éénmalig bij openen
     LaunchedEffect(Unit) { vm.refreshDtcDb() }

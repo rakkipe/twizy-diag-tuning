@@ -1,6 +1,7 @@
 package be.technop.openrlink.uds
 
 import be.technop.openrlink.elm.Elm327
+import be.technop.openrlink.elm.ElmResponse
 
 /**
  * UDS (ISO 14229) over ISO-TP. Omdat Elm327.configUdsTarget() ATCAF1 zet,
@@ -12,20 +13,23 @@ import be.technop.openrlink.elm.Elm327
  *   uds.diagnosticSession(0x03)
  *   uds.readDataByIdentifier(0xF190)
  */
-class UdsClient(private val elm: Elm327) {
+class UdsClient(private val elm: Elm327, private val rxHeader: String? = null) {
 
     data class Result(val ok: Boolean, val data: List<Int>, val raw: String, val nrc: String? = null)
 
     private fun send(pdu: String): Result {
         val raw = elm.sendHex(pdu)
-        val bytes = raw.split(" ", "\n")
-            .mapNotNull { it.trim().takeIf { t -> t.length == 2 }?.toIntOrNull(16) }
-        if (bytes.isEmpty() || raw.contains("NO DATA") || raw.contains("ERROR"))
-            return Result(false, emptyList(), raw, nrc = "Geen/ongeldige respons")
-        // Negatieve respons: 7F <sid> <nrc>
-        if (bytes[0] == 0x7F && bytes.size >= 3)
-            return Result(false, bytes, raw, nrc = nrcText(bytes[2]))
-        return Result(true, bytes, raw)
+        val request = pdu.chunked(2).map { it.toInt(16) }
+        val responses = ElmResponse.messages(raw, rxHeader).map { it.data }
+        val prefix = listOf(request[0] + 0x40) + when (request[0]) {
+            0x21, 0x19, 0x10 -> request.drop(1).take(1)
+            0x22, 0x2E -> request.drop(1).take(2)
+            else -> emptyList()
+        }
+        responses.firstOrNull { it.take(prefix.size) == prefix }?.let { return Result(true, it, raw) }
+        val negative = responses.firstOrNull { it.size >= 3 && it[0] == 0x7F && it[1] == request[0] }
+        return if (negative != null) Result(false, negative, raw, nrcText(negative[2]))
+            else Result(false, emptyList(), raw, "Geen volledige, passende respons")
     }
 
     /** 0x10 DiagnosticSessionControl. 0x01=default 0x02=programming 0x03=extended. */
@@ -33,6 +37,8 @@ class UdsClient(private val elm: Elm327) {
 
     /** 0x22 ReadDataByIdentifier (DID 2 bytes). */
     fun readDataByIdentifier(did: Int): Result = send("22%04X".format(did))
+
+    fun readLocalIdentifier(id: Int): Result = send("21%02X".format(id))
 
     /** 0x2E WriteDataByIdentifier. */
     fun writeDataByIdentifier(did: Int, dataHex: String): Result =

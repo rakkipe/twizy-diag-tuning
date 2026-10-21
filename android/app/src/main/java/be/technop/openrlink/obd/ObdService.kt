@@ -5,9 +5,9 @@ import be.technop.openrlink.elm.Elm327
 /** High-level generieke OBD-II operaties (mode 01/03/04/07/0A). */
 class ObdService(private val elm: Elm327) {
 
-    fun readStoredDtcs(): List<String> = DtcDecoder.decode(elm.command("03"))
-    fun readPendingDtcs(): List<String> = DtcDecoder.decode(elm.command("07"))
-    fun readPermanentDtcs(): List<String> = DtcDecoder.decode(elm.command("0A"))
+    fun readStoredDtcs(): List<String> = CanDtcDecoder.decode(elm.command("03"))
+    fun readPendingDtcs(): List<String> = CanDtcDecoder.decode(elm.command("07"), 0x47)
+    fun readPermanentDtcs(): List<String> = CanDtcDecoder.decode(elm.command("0A"), 0x4A)
 
     /** Mode 04: wis DTC's + MIL. Geeft true bij "44" bevestiging. */
     fun clearDtcs(): Boolean = elm.command("04").replace(" ", "").contains("44")

@@ -1,5 +1,7 @@
 package be.technop.openrlink.obd
 
+import be.technop.openrlink.elm.ElmResponse
+
 /**
  * Standaard OBD-II mode-01 PID's met formule en eenheid.
  * Uitbreiden = één regel toevoegen aan de lijst (modulair).
@@ -34,13 +36,9 @@ object Pids {
      * Geeft null als het geen geldige respons op deze PID is.
      */
     fun parsePayload(pid: Pid, raw: String): IntArray? {
-        val bytes = raw.split(" ", "\n")
-            .mapNotNull { it.trim().takeIf { t -> t.length == 2 }?.toIntOrNull(16) }
-        // verwacht: 0x41, <pidbyte>, data...
         val expectMode = 0x40 + pid.mode.toInt(16)
         val pidByte = pid.pid.toInt(16)
-        val idx = bytes.indexOfFirst { it == expectMode }
-        if (idx < 0 || idx + 1 >= bytes.size || bytes[idx + 1] != pidByte) return null
-        return bytes.drop(idx + 2).toIntArray()
+        return ElmResponse.messages(raw).firstOrNull { it.data.take(2) == listOf(expectMode, pidByte) }
+            ?.data?.drop(2)?.toIntArray()
     }
 }

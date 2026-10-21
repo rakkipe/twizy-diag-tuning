@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import be.technop.openrlink.elm.Elm327
+import be.technop.openrlink.ev.*
 import be.technop.openrlink.obd.ObdService
 import be.technop.openrlink.obd.Pids
 import be.technop.openrlink.renault.TwizyAction
@@ -21,10 +22,15 @@ import be.technop.openrlink.uds.UdsClient
 import be.technop.openrlink.sevcon.SevconCanopen
 import be.technop.openrlink.sevcon.SevconTuner
 import be.technop.openrlink.sevcon.TuningProfiles
+import be.technop.openrlink.sevcon.TuningProfile
+import be.technop.openrlink.sevcon.ProfileRules
+import be.technop.openrlink.sevcon.ProfileStore
 import be.technop.openrlink.transport.BluetoothSppTransport
 import be.technop.openrlink.transport.DemoTransport
 import be.technop.openrlink.transport.Transport
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -41,6 +47,59 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val connected = mutableStateOf(false)
     val busy = mutableStateOf(false)
     val log = mutableStateListOf<String>()
+    val customProfiles = mutableStateListOf<TuningProfile>()
+    val profileMessage = mutableStateOf("")
+    val profileDraft = mutableStateOf<TuningProfile?>(null)
+    val editingProfileName = mutableStateOf<String?>(null)
+    private val profileStore = ProfileStore(app)
+    private var profileStorageReady = false
+
+    init {
+        viewModelScope.launch {
+            try {
+                val saved = withContext(Dispatchers.IO) { profileStore.load() }
+                customProfiles.addAll(saved)
+                profileStorageReady = true
+            } catch (_: Exception) {
+                profileMessage.value = "Eigen profielen konden niet worden gelezen. De opgeslagen gegevens blijven bewaard."
+            }
+        }
+    }
+
+    fun saveProfile(profile: TuningProfile, originalName: String? = null, done: () -> Unit) {
+        if (!profileStorageReady) { profileMessage.value = "Profielopslag is nog niet beschikbaar."; return }
+        val p = profile.copy(name = profile.name.trim())
+        val errors = ProfileRules.errors(p).toMutableList()
+        if (TuningProfiles.LIST.any { it.name.equals(p.name, true) }) errors.add("Kies een eigen naam; standaardprofielen blijven behouden.")
+        if (customProfiles.any { it.name != originalName && it.name.equals(p.name, true) }) errors.add("Er bestaat al een eigen profiel met deze naam.")
+        if (errors.isNotEmpty()) { profileMessage.value = errors.joinToString("\n"); return }
+        if (busy.value) return
+        val next = customProfiles.filterNot { it.name == originalName } + p
+        viewModelScope.launch {
+            busy.value = true
+            try {
+                withContext(Dispatchers.IO) { profileStore.save(next) }
+                customProfiles.clear(); customProfiles.addAll(next)
+                profileMessage.value = "${p.name} bewaard op deze telefoon."
+                done()
+            } catch (_: Exception) { profileMessage.value = "Bewaren mislukt; je vorige profielen zijn behouden." }
+            finally { busy.value = false }
+        }
+    }
+
+    fun deleteProfile(name: String) {
+        if (!profileStorageReady || busy.value) return
+        val next = customProfiles.filterNot { it.name == name }
+        viewModelScope.launch {
+            busy.value = true
+            try {
+                withContext(Dispatchers.IO) { profileStore.save(next) }
+                customProfiles.clear(); customProfiles.addAll(next)
+                profileMessage.value = "$name verwijderd van deze telefoon."
+            } catch (_: Exception) { profileMessage.value = "Verwijderen mislukt; je profielen zijn behouden." }
+            finally { busy.value = false }
+        }
+    }
 
     val dtcStored = mutableStateListOf<String>()
     val dtcPending = mutableStateListOf<String>()
@@ -48,6 +107,48 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val ecuScanResults = mutableStateListOf<String>()
     val meters = mutableStateListOf<Pair<String, String>>()   // (label, waarde)
     val liveRunning = mutableStateOf(false)
+    val vehicle = mutableStateOf(EvVehicle.TWIZY)
+    val evSnapshot = mutableStateOf<EvSnapshot?>(null)
+    val evProgress = mutableStateOf("")
+    val evMessage = mutableStateOf("")
+    val demo = mutableStateOf(false)
+    val dtcPermanent = mutableStateListOf<String>()
+    val obdReadStatus = mutableStateListOf<String>()
+
+    fun selectVehicle(v: EvVehicle) {
+        if (connected.value || busy.value || liveRunning.value) return
+        vehicle.value = v
+        clearReadings()
+    }
+
+    private fun clearReadings() {
+        evSnapshot.value = null; evProgress.value = ""; evMessage.value = ""
+        ecuScanResults.clear(); meters.clear(); live.clear()
+        dtcStored.clear(); dtcPending.clear(); dtcPermanent.clear()
+        obdReadStatus.clear()
+    }
+
+    fun readEv(includeCells: Boolean = true) = io("EV-uitlezing") {
+        val e = elm ?: return@io
+        val v = vehicle.value
+        if (v.isTwizy) return@io
+        withContext(Dispatchers.Main) { evSnapshot.value = null; evMessage.value = "Uitlezen…" }
+        val context = kotlin.coroutines.coroutineContext
+        try {
+            val snapshot = EvReader(e).read(v, includeCells, { context.ensureActive() }) { p ->
+                viewModelScope.launch(Dispatchers.Main) { evProgress.value = p }
+            }
+            withContext(Dispatchers.Main) {
+                evSnapshot.value = snapshot
+                evMessage.value = if (snapshot.metrics.isEmpty() && snapshot.cells.isEmpty())
+                    "Geen bruikbare metingen. Controleer voertuigkeuze, contact, adapter en CAN-toegang."
+                    else "Momentopname klaar — ${snapshot.metrics.size} waarden, ${snapshot.cells.size}/96 cellen."
+            }
+        } catch (ex: Exception) {
+            withContext(Dispatchers.Main) { evMessage.value = "Uitlezing mislukt: ${ex.message}" }
+            throw ex
+        } finally { withContext(Dispatchers.Main) { evProgress.value = "" } }
+    }
 
     private val ioMutex = Mutex()          // serialiseert poort-toegang (live <-> acties)
     private var liveJob: Job? = null
@@ -91,7 +192,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun logLine(s: String) { log.add(0, s); if (log.size > 200) log.removeAt(log.size - 1) }
 
-    fun connectDemo() = connectWith(DemoTransport())
+    fun connectDemo() = connectWith(DemoTransport(vehicle.value))
 
     fun connectBluetooth(device: BluetoothDevice) = connectWith(BluetoothSppTransport(device))
 
@@ -108,7 +209,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         connectWith(be.technop.openrlink.transport.TcpTransport(host, port))
 
     private fun connectWith(t: Transport) {
+        if (busy.value || connected.value) return
         viewModelScope.launch {
+            clearReadings()
             busy.value = true; status.value = "Verbinden met ${t.name}…"
             try {
                 withContext(Dispatchers.IO) {
@@ -120,9 +223,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     if (!ok) throw IllegalStateException("Adapter reageerde niet als ELM/STN")
                 }
                 connected.value = true
+                demo.value = t is DemoTransport
                 status.value = "Verbonden — ${t.name}"
                 logLine("✓ Verbonden met ${t.name}")
             } catch (ex: Exception) {
+                withContext(Dispatchers.IO) { t.close() }
+                transport = null; elm = null; obd = null; twizy = null
                 status.value = "Fout: ${ex.message}"
                 logLine("✗ ${ex.message}")
                 connected.value = false
@@ -131,25 +237,40 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun disconnect() {
+        if (busy.value) return
         liveJob?.cancel(); liveRunning.value = false
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { transport?.close() }
+            busy.value = true
+            withContext(Dispatchers.IO) { ioMutex.withLock { transport?.close(); transport = null; elm = null; obd = null; twizy = null } }
             connected.value = false; status.value = "Niet verbonden"
+            demo.value = false; clearReadings(); busy.value = false
             logLine("Verbinding gesloten")
         }
     }
 
     fun scanDtcs() = io("DTC-scan") {
         val o = obd ?: return@io
-        val stored = o.readStoredDtcs(); val pending = o.readPendingDtcs()
-        withContext(Dispatchers.Main) {
-            dtcStored.clear(); dtcStored.addAll(stored)
-            dtcPending.clear(); dtcPending.addAll(pending)
-            logLine("DTC's: ${stored.size} opgeslagen, ${pending.size} pending")
+        withContext(Dispatchers.Main) { dtcStored.clear(); dtcPending.clear(); dtcPermanent.clear(); obdReadStatus.clear() }
+        elm?.configGenericObd()
+        val operations = listOf(
+            Triple("Opgeslagen", { o.readStoredDtcs() }, dtcStored),
+            Triple("Pending", { o.readPendingDtcs() }, dtcPending),
+            Triple("Permanent", { o.readPermanentDtcs() }, dtcPermanent)
+        )
+        for ((name, read, destination) in operations) {
+            try {
+                val codes = read()
+                withContext(Dispatchers.Main) { destination.addAll(codes); obdReadStatus.add("$name: ${codes.size} codes (dienst beantwoord)") }
+            } catch (ex: IllegalArgumentException) {
+                withContext(Dispatchers.Main) { obdReadStatus.add("$name: niet uitgelezen — ${ex.message}") }
+            }
         }
+        withContext(Dispatchers.Main) { logLine("OBD-scan klaar; zie de status per dienst.") }
     }
 
     fun clearDtcs() = io("DTC wissen") {
+        if (!vehicle.value.isTwizy) return@io
+        elm?.configGenericObd()
         val ok = obd?.clearDtcs() == true
         withContext(Dispatchers.Main) {
             if (ok) { dtcStored.clear(); dtcPending.clear() }
@@ -161,15 +282,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  uit de lokale ecu.zip. Start per ECU eerst een sessie (Renault fout-sectie 1081). */
     fun ecuScan() = io("ECU-scan") {
         val e = elm ?: return@io
-        val uds = UdsClient(e)
+        val v = vehicle.value
+        withContext(Dispatchers.Main) { ecuScanResults.clear() }
         val results = ArrayList<String>()
-        for (ecu in RenaultEcus.TWIZY) {
-            e.configUdsTarget(ecu.txHeader, ecu.rxHeader)
-            var sess = e.sendHex("1081")            // Renault 'StartOfSectionDefaut'
-            if (!sess.contains("5081")) e.sendHex("10C0")   // fallback extended session
+        val targets = if (v.isTwizy) RenaultEcus.TWIZY.filter { it.key != "PEB" }
+            .map { EcuTarget(it.label, it.txHeader, it.rxHeader) } else v.scanTargets
+        for (ecu in targets) {
+            e.configUdsTarget(ecu.tx, ecu.rx)
+            val uds = UdsClient(e, ecu.rx)
+            if (v.isTwizy) {
+                if (!uds.diagnosticSession(0x81).ok) uds.diagnosticSession(0xC0)
+            }
             val r = uds.readDtcInformation(0x02, 0xFF)
-            val head = "▶ ${ecu.label} (${ecu.txHeader}/${ecu.rxHeader}): "
-            if (r.ok && r.data.size >= 3 && r.data[0] == 0x59) {
+            val head = "▶ ${ecu.name} (${ecu.tx}/${ecu.rx}): "
+            if (r.ok && r.data.size >= 3 && r.data.take(2) == listOf(0x59, 0x02) && (r.data.size - 3) % 4 == 0) {
                 val body = r.data.drop(3)           // na 59 02 <mask>
                 val dtcs = ArrayList<String>()
                 var i = 0
@@ -177,7 +303,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val code = "%02X%02X%02X".format(body[i], body[i + 1], body[i + 2])
                     val st = body[i + 3]
                     if (code != "000000") {
-                        val txt = dtcDb.lookup(code)
+                        val txt = if (v.isTwizy) dtcDb.lookup(code) else null
                         dtcs.add("$code (st %02X)".format(st) + (txt?.let { " → $it" } ?: ""))
                     }
                     i += 4
@@ -185,14 +311,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 results.add(head + if (dtcs.isEmpty()) "geen DTC's" else "${dtcs.size} DTC('s)")
                 dtcs.forEach { results.add("   • $it") }
             } else if (r.nrc != null) {
-                results.add(head + "geen DTC-dienst (${r.nrc})")
+                results.add(head + "niet uitgelezen (${r.nrc})")
             } else {
-                results.add(head + "geen antwoord")
+                results.add(head + "ongeldig/onvolledig antwoord")
             }
         }
-        e.clearFilter()
-        val note = if (dtcDb.available()) "DTC-tekst: uit ${dtcDb.path}"
-                   else "DTC-tekst: geen ecu.zip gevonden — alleen codes (zie ECU-tab)"
+        val note = if (v.isTwizy && dtcDb.available()) "DTC-tekst: uit ${dtcDb.path}"
+                   else "Ruwe ECU-codes; geen bevestigde voertuiggebonden omschrijving beschikbaar."
         withContext(Dispatchers.Main) {
             ecuScanResults.clear(); ecuScanResults.addAll(results); ecuScanResults.add(note)
             logLine("ECU-scan klaar: ${results.size} regels")
@@ -200,13 +325,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Namen van de beschikbare tuning-profielen (voor de UI-knoppen). */
-    fun tuningProfileNames(): List<String> = TuningProfiles.LIST.map { it.name }
+    fun tuningProfileNames(): List<String> = (TuningProfiles.LIST + customProfiles).map { it.name }
+
+    fun profileByName(name: String): TuningProfile? =
+        TuningProfiles.byName(name) ?: customProfiles.firstOrNull { it.name == name }
 
     /** Past een tuning-profiel toe via CANopen SDO. WRITE — alleen na bevestiging,
      *  auto stilstaand in N. Faalt veilig als de auto in GO staat. */
     fun applyTuning(profileName: String) = io("Tuning $profileName") {
+        check(vehicle.value.isTwizy) { "SEVCON-tuning is uitsluitend voor Twizy" }
         val e = elm ?: return@io
-        val p = TuningProfiles.byName(profileName) ?: run {
+        val p = profileByName(profileName) ?: run {
             withContext(Dispatchers.Main) { logLine("Onbekend profiel $profileName") }; return@io
         }
         withContext(Dispatchers.Main) { logLine("=== Profiel $profileName toepassen ===") }
@@ -224,8 +353,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Live SEVCON-meters (OVMS-meetblok 0x4600/0x4602) — start/stop poll-lus. */
     fun toggleLiveMeters() {
-        if (liveRunning.value) { liveJob?.cancel(); liveRunning.value = false; return }
+        if (liveRunning.value) { liveJob?.cancel(); if (vehicle.value.isTwizy) liveRunning.value = false; return }
+        if (busy.value) return
         if (!connected.value) { logLine("Niet verbonden — meters"); return }
+        if (!vehicle.value.isTwizy) { startEvLive(); return }
         liveRunning.value = true
         liveJob = viewModelScope.launch(Dispatchers.IO) {
             val e = elm ?: return@launch
@@ -235,6 +366,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             while (isActive) {
                 val out = ArrayList<Pair<String, String>>()
                 ioMutex.withLock {
+                    sc.configCanopen()
                     fun rd(idx: Int, sub: Int): Long? { val r = sc.read(idx, sub); return if (r.ok) sgn(r.value) else null }
                     val bat = rd(0x4602, 0x11); out.add("Accu-spanning" to (bat?.let { "%.1f V".format(it / 16.0) } ?: "—"))
                     val cap = rd(0x4602, 0x12); out.add("Cap-spanning" to (cap?.let { "%.1f V".format(it / 16.0) } ?: "—"))
@@ -252,11 +384,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun readLive() = io("Live snapshot") {
+        elm?.configGenericObd()
         val snap = obd?.snapshot() ?: emptyList()
         withContext(Dispatchers.Main) { live.clear(); live.addAll(snap); logLine("Live: ${snap.size}/${Pids.LIST.size} PID's") }
     }
 
     fun runTwizyAction(action: TwizyAction) = io("Twizy: ${action.title}") {
+        check(vehicle.value.isTwizy) { "Twizy-actie niet beschikbaar voor dit voertuig" }
         val res = twizy?.execute(action)
         withContext(Dispatchers.Main) {
             val txt = when {
@@ -269,6 +403,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun sendRaw(cmd: String) = io("RAW $cmd") {
+        check(vehicle.value.isTwizy) { "Terminal is uitgeschakeld tijdens Zoe/Leaf-uitlezing" }
         val r = elm?.command(cmd) ?: "geen verbinding"
         withContext(Dispatchers.Main) {
             terminalOutput.value = "> $cmd\n$r\n\n" + terminalOutput.value
@@ -277,11 +412,39 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun io(tag: String, block: suspend () -> Unit) {
         viewModelScope.launch {
+            if (busy.value || liveRunning.value) { logLine("Stop live of wacht op de huidige actie — $tag"); return@launch }
             if (!connected.value) { logLine("Niet verbonden — $tag overgeslagen"); return@launch }
             busy.value = true
             try { withContext(Dispatchers.IO) { ioMutex.withLock { block() } } }
             catch (e: Exception) { logLine("✗ $tag: ${e.message}") }
             finally { busy.value = false }
         }
+    }
+
+    private fun startEvLive() {
+        val v = vehicle.value
+        liveRunning.value = true
+        liveJob = viewModelScope.launch {
+            try {
+                while (isActive) {
+                    evSnapshot.value = null; evMessage.value = "Nieuwe live-meting…"
+                    val context = kotlin.coroutines.coroutineContext
+                    val snapshot = withContext(Dispatchers.IO) {
+                        ioMutex.withLock { EvReader(elm ?: error("Verbinding gesloten")).read(v, false, { context.ensureActive() }) }
+                    }
+                    evSnapshot.value = snapshot
+                    evMessage.value = if (snapshot.metrics.isEmpty()) "Geen bruikbare live-gegevens; controleer contact en CAN-toegang." else "Live-momentopname"
+                    delay(10000)
+                }
+            } catch (ex: CancellationException) { throw ex }
+            catch (ex: Exception) { evSnapshot.value = null; evMessage.value = "Live gestopt: ${ex.message}"; logLine(evMessage.value) }
+            finally { liveRunning.value = false }
+        }
+    }
+
+    override fun onCleared() {
+        liveJob?.cancel()
+        transport?.close()
+        super.onCleared()
     }
 }

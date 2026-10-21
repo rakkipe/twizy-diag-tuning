@@ -1,0 +1,16 @@
+{
+  "version": "1.5.0-preview",
+  "versionCode": 9,
+  "unitTests": 20,
+  "failures": 0,
+  "emulator": "Android 11 API 30",
+  "uiChecks": [
+    "Zoe PH1 96/96 cells",
+    "Zoe ZE50 96/96 cells",
+    "Leaf 24/30 96/96 cells",
+    "Leaf 40/62 96/96 cells",
+    "ZE50 live start/stop"
+  ],
+  "hardwareValidated": false,
+  "apkSha256": "7d94e8aecb6967505cfbb27f829cff5bb42a4454245e2d9f9b837d0f78f8e3dc"
+}

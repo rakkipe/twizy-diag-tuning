@@ -22,8 +22,8 @@ android {
         applicationId = "be.technop.openrlink"
         minSdk = 26          // Android 8.0 — nodig voor moderne BT-API's
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.3.0"
+        versionCode = 9
+        versionName = "1.5.0-preview"
     }
 
     signingConfigs {
@@ -55,6 +55,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.6")

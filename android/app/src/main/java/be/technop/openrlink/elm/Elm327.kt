@@ -26,7 +26,7 @@ class Elm327(private val transport: Transport) {
         return resp.lineSequence()
             .map { it.trim() }
             .filter { it.isNotEmpty() && !it.equals(cmd, ignoreCase = true) }
-            .joinToString(" ")
+            .joinToString("\n")
             .trim()
     }
 
@@ -55,13 +55,23 @@ class Elm327(private val transport: Transport) {
      * ATFCSM1 + ATFCSH/ATFCSD = expliciete flow-control voor adapters die het niet automatisch doen.
      */
     fun configUdsTarget(txHeader: String, rxHeader: String) {
-        command("ATSP6")
-        command("ATCAF1")               // ISO-TP framing door ELM
-        command("ATSH$txHeader")        // set request header
-        command("ATCRA$rxHeader")       // accepteer alleen dit respons-ID
-        command("ATFCSH$txHeader")      // flow-control header
-        command("ATFCSD300000")         // FC data: ST=0, BS=0
-        command("ATFCSM1")              // flow-control mode 1 (user defined)
+        require(txHeader.matches(Regex("[0-9A-Fa-f]{3}|[0-9A-Fa-f]{8}")) && txHeader.length == rxHeader.length)
+        require(rxHeader.matches(Regex("[0-9A-Fa-f]{3}|[0-9A-Fa-f]{8}")))
+        fun set(cmd: String) { check(command(cmd).trim() == "OK") { "Adapter ondersteunt $cmd niet" } }
+        set(if (txHeader.length == 8) "ATSP7" else "ATSP6")
+        set("ATH1"); set("ATS1"); set("ATCAF1"); set("ATAL"); set("ATCFC1")
+        set("ATSH$txHeader")
+        set("ATCRA$rxHeader")
+        set("ATFCSH$txHeader")
+        set("ATFCSD300000")
+        set("ATFCSM1")
+    }
+
+    /** Restore every setting changed by CANopen/targeted reads, including broadcast header. */
+    fun configGenericObd() {
+        command("ATSP6"); command("ATCAF1"); command("ATH1"); command("ATS1")
+        command("ATFCSM0"); command("ATCFC1"); command("ATSH7DF")
+        clearFilter()
     }
 
     /** Reset filter zodat alle ECU's weer antwoorden (na gerichte UDS). */

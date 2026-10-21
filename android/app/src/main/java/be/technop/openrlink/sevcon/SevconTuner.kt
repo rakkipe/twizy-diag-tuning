@@ -5,7 +5,8 @@ data class TuningProfile(
     val name: String,
     val speed: Int, val warn: Int,
     val torque: Int, val powerLow: Int, val powerHigh: Int, val current: Int,
-    val drive: Int, val neutral: Int, val brake: Int
+    val drive: Int, val neutral: Int, val brake: Int,
+    val rampStart: Int = 40, val rampAccel: Int = 25
 )
 
 object TuningProfiles {
@@ -16,6 +17,9 @@ object TuningProfiles {
         TuningProfile("STAD",      45, 50,  90,  90,  90, 100,  80, 40, 50),
         TuningProfile("SNELWEG",   90, 95, 110, 120, 120, 110, 100, 18, 25),
         TuningProfile("RACE-LITE", 90, 95, 150, 140, 140, 110, 100, 20, 35),
+        // Sprintbasis: vlottere opbouw, lager koppeldoel dan RACE-LITE.
+        // Ontwerpinstellingen, nog niet op de auto gevalideerd.
+        TuningProfile("DRAGRACE", 90, 95, 130, 139, 130, 110, 100, 20, 35, 60, 80),
     )
     fun byName(n: String) = LIST.firstOrNull { it.name == n }
 }
@@ -152,9 +156,9 @@ class SevconTuner(private val sc: SevconCanopen, private val log: (String) -> Un
         if (!W(0x2920, 0x04, scale(Recup, RecupPrc, b, 0, 1000))) return false
         return true
     }
-    private fun cfgRamps(): Boolean {
-        if (!W(0x291c, 0x02, scale(RampStart, RampStartPrm, RampStartPrm, 10, 10000))) return false
-        if (!W(0x2920, 0x07, scale(RampAccel, RampAccelPrc, RampAccelPrc, 10, 10000))) return false
+    private fun cfgRamps(start: Int, accel: Int): Boolean {
+        if (!W(0x291c, 0x02, scale(RampStart, RampStartPrm, start, 10, 10000))) return false
+        if (!W(0x2920, 0x07, scale(RampAccel, RampAccelPrc, accel, 10, 10000))) return false
         if (!W(0x2920, 0x0b, scale(2000, 20, 20, 10, 10000))) return false
         if (!W(0x2920, 0x0d, scale(4000, 40, 40, 10, 10000))) return false
         if (!W(0x2920, 0x0e, scale(4000, 40, 40, 10, 10000))) return false
@@ -163,12 +167,14 @@ class SevconTuner(private val sc: SevconCanopen, private val log: (String) -> Un
 
     /** Retourneert "ok" of de stap waar het misging. */
     fun applyProfile(p: TuningProfile): String {
+        val errors = ProfileRules.errors(p)
+        if (errors.isNotEmpty()) { log(errors.joinToString("; ")); return "profielcontrole" }
         maxRpm = 0; maxTrq = 0; pwrLo = 0; pwrHi = 0
         log("NMT Start…"); try { sc.nmtStart() } catch (_: Exception) {}
         log("Login…"); val (ok, st) = sc.login(); if (!ok) { log("  LOGIN FOUT: $st"); return "login" }
         log("Drive…"); if (!cfgDrive(p.drive)) return "drive"
         log("Recup…"); if (!cfgRecup(p.neutral, p.brake)) return "recup"
-        log("Ramps…"); if (!cfgRamps()) return "ramps"
+        log("Ramps…"); if (!cfgRamps(p.rampStart, p.rampAccel)) return "ramps"
         log("Pre-operationeel…"); sc.enterCfg()
         var res = "ok"
         try {
